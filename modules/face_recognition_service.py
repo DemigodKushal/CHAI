@@ -4,6 +4,7 @@ import faiss
 import numpy as np
 import insightface
 import pickle
+from pathlib import Path
 
 
 class FaceRecognitionService:
