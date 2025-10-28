@@ -37,7 +37,7 @@ class FaceRecognitionService:
         self.id_map_path = str(data_dir / "id_map.bin")
 
         # Model setup
-        self.model = insightface.app.FaceAnalysis(name="buffalo_l", providers=["CUDAExecutionProvider"])
+        self.model = insightface.app.FaceAnalysis(name="buffalo_l", providers=["CPUExecutionProvider"])
         self.model.prepare(ctx_id=0)
 
         # Load or initialize FAISS index and ID map
