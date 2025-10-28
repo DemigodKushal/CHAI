@@ -33,7 +33,7 @@ class AttendanceService:
                     student_id, similarity = self.face_service.find_match(emb)
 
                     if student_id is not None:
-                        confidence = similarity  # cosine similarity directly
+                        confidence = 1 - (similarity/2)  # cosine similarity directly
                         student = self.db_service.get_student_by_id(student_id)
                         self.db_service.mark_attendance(student_id, confidence)
                         print(f"✅ {student.name} recognized (similarity={confidence:.2f})")
