@@ -36,7 +36,7 @@ def capture_image(roll_no):
 
 # ------------------ MAIN FLOW ------------------
 def main():
-    face_service = FaceRecognitionService(threshold=0.55)
+    face_service = FaceRecognitionService(threshold=1)
     db_service = DatabaseService()
     attendance_service = AttendanceService(face_service, db_service)
 

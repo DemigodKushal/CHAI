@@ -23,3 +23,15 @@ class DatabaseService:
 
     def list_students(self):
         return self.session.query(Student).all()
+
+    def get_total_attendance_for_student(self, student_id):
+        return self.session.query(Attendance).filter(Attendance.student_id == student_id).count()
+
+    def get_recent_attendance_for_student(self, student_id, limit=5):
+        return (
+            self.session.query(Attendance)
+            .filter(Attendance.student_id == student_id)
+            .order_by(Attendance.timestamp.desc())
+            .limit(limit)
+            .all()
+        )

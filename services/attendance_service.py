@@ -37,8 +37,20 @@ class AttendanceService:
                         student = self.db_service.get_student_by_id(student_id)
                         self.db_service.mark_attendance(student_id, confidence)
                         print(f"✅ {student.name} recognized (similarity={confidence:.2f})")
+                        # 📊 Show student-specific attendance summary
+                        total = self.db_service.get_total_attendance_for_student(student_id)
+                        print(f"📈 Total attendance for {student.name}: {total}")
+
+                        recent = self.db_service.get_recent_attendance_for_student(student_id)
+                        print(f"🕒 Last {len(recent)} attendance records for {student.name}:")
+                        for a in recent:
+                            print(f" - {a.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+
+                        #mark attendance
                     else:
                         print(f"❌ Unknown face detected (similarity={similarity:.2f})")
+
+                        #go to registration
 
             elif key == ord("q"):
                 print("👋 Exiting attendance mode.")
