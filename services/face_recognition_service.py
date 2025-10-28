@@ -67,8 +67,7 @@ class FaceRecognitionService:
         if cap is None:
             cap = cv2.VideoCapture(0)
             if not cap.isOpened():
-                print("Cannot open camera")
-                return None
+                raise RuntimeError("Failed to open webcam.")
 
         print('Press S to capture face, Q to quit.')
         while True:
@@ -99,8 +98,7 @@ class FaceRecognitionService:
         """
         faces = self.model.get(img)
         if len(faces) == 0:
-            print("No faces detected")
-            return None
+            raise ValueError("No face found in image")
         else:
             # Choose the largest detected face (in case multiple faces are present)
             face = max(faces, key=lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1]))
@@ -135,8 +133,7 @@ class FaceRecognitionService:
                 - distance (float or None): L2 distance to the matched embedding, or None if no match found.
         """
         if self.index.ntotal == 0:
-            print("No faces registered in DB")
-            return None, None
+            raise LookupError("Database is empty")
 
         # Search for the closest embedding in the index
         D, I = self.index.search(np.array([emb], dtype='float32'), k=1)
