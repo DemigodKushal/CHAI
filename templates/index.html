@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CHAI - Attendance System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎓 CHAI Attendance</h1>
+            <div class="nav-links">
+                <a href="/" class="active">Home</a>
+                <a href="/enroll">Enroll</a>
+                <a href="/attendance">Take Attendance</a>
+                <a href="/dashboard">Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="hero">
+        <div class="container">
+            <h1 class="hero-title">Smart Attendance System</h1>
+            <p class="hero-subtitle">Face Recognition + Flash Liveness Detection</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">👤</div>
+                    <h3>Face Recognition</h3>
+                    <p>Advanced InsightFace technology for accurate identification</p>
+                    <a href="/enroll" class="btn btn--primary">Enroll Student</a>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">✨</div>
+                    <h3>Liveness Detection</h3>
+                    <p>Flash-based anti-spoofing to prevent fake attendance</p>
+                    <a href="/attendance" class="btn btn--primary">Take Attendance</a>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Analytics Dashboard</h3>
+                    <p>View attendance records and student statistics</p>
+                    <a href="/dashboard" class="btn btn--primary">View Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>CHAI Attendance System &copy; 2025 | IIT BHU</p>
+    </footer>
+</body>
+</html>

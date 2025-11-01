@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Dashboard - CHAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        body {
+            background: #0a0a0a;
+            color: #f0f0f0;
+        }
+
+        .dashboard-container {
+            padding: 2rem;
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        h2 {
+            color: #32b8c6;
+            margin-bottom: 1.5rem;
+        }
+
+        .attendance-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a1a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .attendance-table th,
+        .attendance-table td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid rgba(50, 184, 198, 0.2);
+        }
+
+        .attendance-table th {
+            background: #2a2a2a;
+            color: #32b8c6;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .attendance-table th.student-col {
+            text-align: left;
+            min-width: 200px;
+        }
+
+        .attendance-table td.student-info {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .date-header {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+            min-width: 40px;
+        }
+
+        .today {
+            background: rgba(50, 184, 198, 0.2);
+        }
+
+        .present {
+            color: #5ad87c;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .absent {
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .student-name {
+            font-weight: 600;
+            color: #32b8c6;
+        }
+
+        .student-roll {
+            color: #999;
+            font-size: 0.9rem;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            background: #1a1a1a;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid rgba(50, 184, 198, 0.3);
+            min-width: 200px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            color: #32b8c6;
+            font-weight: 600;
+        }
+
+        .stat-label {
+            color: #999;
+            margin-top: 0.5rem;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 120px;
+            background-color: #2a2a2a;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -60px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .navbar {
+            background: #1a1a1a;
+            border-bottom: 1px solid rgba(50, 184, 198, 0.3);
+        }
+
+        .navbar a {
+            color: #f0f0f0;
+        }
+
+        .navbar a.active {
+            color: #32b8c6;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎓 CHAI Attendance</h1>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/enroll">Enroll</a>
+                <a href="/attendance">Take Attendance</a>
+                <a href="/dashboard" class="active">Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <h2>📊 Attendance Dashboard</h2>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ students|length }}</div>
+                <div class="stat-label">Total Students</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ dates|length }}</div>
+                <div class="stat-label">Days Tracked</div>
+            </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+            <table class="attendance-table">
+                <thead>
+                    <tr>
+                        <th class="student-col">Student</th>
+                        {% for date in dates %}
+                        <th class="date-header {% if date == today %}today{% endif %}">
+                            {{ date.strftime('%d/%m') }}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for student in students %}
+                    <tr>
+                        <td class="student-info">
+                            <div class="student-name">{{ student.name }}</div>
+                            <div class="student-roll">{{ student.roll_no }}</div>
+                        </td>
+                        {% for date in dates %}
+                        <td class="{% if date == today %}today{% endif %}">
+                            {% if date in student.attendance %}
+                            <div class="tooltip present">
+                                ✓
+                                <span class="tooltiptext">
+                                    {{ student.attendance[date].time }}<br>
+                                    {{ (student.attendance[date].confidence * 100)|round(1) }}%
+                                </span>
+                            </div>
+                            {% else %}
+                            <span class="absent">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

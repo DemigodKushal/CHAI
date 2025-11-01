@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Attendance - CHAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Dark background for better flash contrast */
+        body.attendance-page {
+            background-color: #0a0a0a;
+            color: #f0f0f0;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .attendance-container {
+            background-color: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .attendance-container h2 {
+            color: #32b8c6;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+        
+        .video-section {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .info-text {
+            color: #b0b0b0;
+            margin: 0.5rem 0;
+            font-size: 0.9rem;
+        }
+        
+        /* Flash overlay - covers entire screen */
+        #flashOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 9999;
+            transition: opacity 0.05s;
+        }
+        
+        #flashOverlay.active {
+            opacity: 1;
+        }
+        
+        /* Video container */
+        .video-container {
+            position: relative;
+            display: inline-block;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(50, 184, 198, 0.3);
+        }
+        
+        #videoElement {
+            width: 640px;
+            height: 480px;
+            border-radius: 12px;
+            background: #000;
+            display: block;
+        }
+        
+        #canvasElement {
+            display: none;
+        }
+        
+        /* Loading indicator */
+        .camera-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #32b8c6;
+            font-size: 1.2rem;
+        }
+        
+        /* Button styling */
+        .btn--primary {
+            background: linear-gradient(135deg, #32b8c6 0%, #28a5b3 100%);
+            color: #0a0a0a;
+            font-weight: 600;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            margin-top: 1rem;
+            box-shadow: 0 4px 12px rgba(50, 184, 198, 0.3);
+        }
+        
+        .btn--primary:hover {
+            background: linear-gradient(135deg, #28a5b3 0%, #218a96 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(50, 184, 198, 0.4);
+        }
+        
+        .btn--primary:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Status messages */
+        .status-message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-weight: 500;
+            text-align: center;
+            display: none;
+        }
+        
+        .status-message.loading {
+            background: rgba(50, 184, 198, 0.15);
+            color: #64c9dc;
+            border: 1px solid rgba(50, 184, 198, 0.3);
+            display: block;
+        }
+        
+        .status-message.success {
+            background: rgba(74, 222, 128, 0.15);
+            color: #5ad87c;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            display: block;
+        }
+        
+        .status-message.error {
+            background: rgba(255, 107, 107, 0.15);
+            color: #ff6b6b;
+            border: 1px solid rgba(255, 107, 107, 0.3);
+            display: block;
+        }
+        
+        /* Result card */
+        .result-card {
+            background: #1a1a1a;
+            border: 2px solid #32b8c6;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            text-align: center;
+            display: none;
+        }
+        
+        .result-card h3 {
+            color: #32b8c6;
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+        
+        .result-card p {
+            color: #d0d0d0;
+            margin: 0.3rem 0;
+            font-size: 1.1rem;
+        }
+        
+        /* Navbar for dark theme */
+        .navbar {
+            background: #1a1a1a;
+            border-bottom: 1px solid rgba(50, 184, 198, 0.3);
+        }
+        
+        .navbar a {
+            color: #f0f0f0;
+        }
+        
+        .navbar a.active {
+            color: #32b8c6;
+        }
+        
+        .navbar a:hover {
+            color: #64c9dc;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            #videoElement {
+                width: 100%;
+                height: auto;
+            }
+            
+            .attendance-container {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body class="attendance-page">
+    <div id="flashOverlay"></div>
+    
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎓 CHAI Attendance</h1>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/enroll">Enroll</a>
+                <a href="/attendance" class="active">Take Attendance</a>
+                <a href="/dashboard">Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 80px;">
+        <div class="attendance-container">
+            <h2>✨ Attendance with Flash Liveness Detection</h2>
+            
+            <div class="video-section">
+                <div class="video-container">
+                    <video id="videoElement" autoplay playsinline muted></video>
+                    <canvas id="canvasElement"></canvas>
+                    <div id="cameraLoading" class="camera-loading" style="display: none;">
+                        📷 Starting camera...
+                    </div>
+                </div>
+                <p class="info-text">Position your face in the frame and click the button below</p>
+                <p class="info-text" style="color: #32b8c6;">⚡ The screen will flash white - look directly at the camera!</p>
+                <p class="info-text" style="color: #ffa500;">💡 Dark background improves flash detection accuracy</p>
+            </div>
+            
+            <button id="takeAttendanceBtn" class="btn btn--primary">
+                📸 Take Attendance with Flash
+            </button>
+            
+            <div id="attendanceStatus" class="status-message"></div>
+            
+            <div id="resultCard" class="result-card">
+                <h3 id="resultName"></h3>
+                <p id="resultId"></p>
+                <p id="resultConfidence"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let videoStream = null;
+        const video = document.getElementById('videoElement');
+        const canvas = document.getElementById('canvasElement');
+        const ctx = canvas.getContext('2d');
+        const cameraLoading = document.getElementById('cameraLoading');
+        const statusDiv = document.getElementById('attendanceStatus');
+
+        // Start camera with permission handling
+        async function startCamera() {
+            cameraLoading.style.display = 'block';
+            
+            try {
+                // Request camera permission
+                videoStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    } 
+                });
+                
+                video.srcObject = videoStream;
+                canvas.width = 640;
+                canvas.height = 480;
+                
+                cameraLoading.style.display = 'none';
+                console.log('✅ Camera started successfully');
+                
+            } catch (err) {
+                cameraLoading.style.display = 'none';
+                console.error('❌ Error accessing camera:', err);
+                
+                let errorMessage = 'Could not access camera. ';
+                
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    errorMessage += 'Please grant camera permissions and refresh the page.';
+                } else if (err.name === 'NotFoundError') {
+                    errorMessage += 'No camera found on this device.';
+                } else if (err.name === 'NotReadableError') {
+                    errorMessage += 'Camera is already in use by another application.';
+                } else {
+                    errorMessage += err.message;
+                }
+                
+                statusDiv.className = 'status-message error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = '❌ ' + errorMessage;
+            }
+        }
+
+        // Capture frame as base64
+        function captureFrame() {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.8);
+        }
+
+        // Do flash and capture frames
+        async function doFlashCapture() {
+            const overlay = document.getElementById('flashOverlay');
+            
+            // Capture BEFORE flash (5 frames over 250ms)
+            const beforeFrames = [];
+            for (let i = 0; i < 5; i++) {
+                beforeFrames.push(captureFrame());
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            // Do the FLASH (bright white screen)
+            overlay.classList.add('active');
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // Capture DURING/AFTER flash (5 frames over 250ms)
+            const afterFrames = [];
+            for (let i = 0; i < 5; i++) {
+                afterFrames.push(captureFrame());
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+            
+            // Remove flash
+            overlay.classList.remove('active');
+            
+            return { beforeFrames, afterFrames };
+        }
+
+        // Take attendance button handler
+        document.getElementById('takeAttendanceBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('takeAttendanceBtn');
+            const resultCard = document.getElementById('resultCard');
+            
+            // Check if camera is ready
+            if (!videoStream || video.readyState !== 4) {
+                statusDiv.className = 'status-message error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = '❌ Camera not ready. Please wait or refresh the page.';
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Processing...';
+            
+            statusDiv.className = 'status-message loading';
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = '📸 Preparing flash liveness check...';
+            resultCard.style.display = 'none';
+            
+            try {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                statusDiv.textContent = '⚡ Flashing now... Keep looking at the camera!';
+                
+                // Do flash and capture frames
+                const { beforeFrames, afterFrames } = await doFlashCapture();
+                
+                statusDiv.textContent = '🔍 Analyzing liveness and recognizing face...';
+                
+                // Send to backend
+                const response = await fetch('/api/take_attendance_browser', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        before_frames: beforeFrames, 
+                        after_frames: afterFrames 
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = '✅ ' + data.message;
+                    
+                    // Show result card
+                    resultCard.style.display = 'block';
+                    document.getElementById('resultName').textContent = '👤 ' + data.name;
+                    document.getElementById('resultId').textContent = '🎓 Student ID: ' + data.student_id;
+                    document.getElementById('resultConfidence').textContent = '✨ Confidence: ' + data.confidence;
+                    
+                    // Auto-hide after 5 seconds
+                    setTimeout(() => {
+                        resultCard.style.display = 'none';
+                        statusDiv.style.display = 'none';
+                    }, 5000);
+                    
+                } else {
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '❌ ' + data.message;
+                }
+                
+            } catch (error) {
+                statusDiv.className = 'status-message error';
+                statusDiv.textContent = '❌ Error: ' + error.message;
+                console.error('Error:', error);
+                
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📸 Take Attendance with Flash';
+            }
+        });
+
+        // Start camera when page loads
+        window.addEventListener('load', () => {
+            console.log('🚀 Page loaded, starting camera...');
+            startCamera();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+        });
+
+                // ==================== CAMERA CLEANUP ====================
+        
+        // Stop camera when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('📷 Camera stopped (page unload)');
+                });
+            }
+        });
+        
+        // Stop camera when page becomes hidden (tab switch)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && videoStream) {
+                videoStream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('📷 Camera stopped (page hidden)');
+                });
+            }
+        });
+        
+        // Stop camera immediately when clicking navigation links
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.navbar a').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    if (videoStream) {
+                        videoStream.getTracks().forEach(track => {
+                            track.stop();
+                            console.log('📷 Camera stopped (navigation)');
+                        });
+                    }
+                });
+            });
+        });
+
+    </script>
+</body>
+</html>

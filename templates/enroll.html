@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enroll Student - CHAI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .camera-controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .video-frame {
+            width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 8px;
+        }
+        
+        .btn-camera {
+            margin: 10px;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        
+        .btn-start {
+            background: #32b8c6;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #ff6b6b;
+            color: white;
+        }
+        
+        .camera-status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        
+        .camera-off {
+            background: rgba(255, 107, 107, 0.2);
+            color: #ff6b6b;
+        }
+        
+        .camera-on {
+            background: rgba(50, 184, 198, 0.2);
+            color: #32b8c6;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1 class="logo">🎓 CHAI Attendance</h1>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/enroll" class="active">Enroll</a>
+                <a href="/attendance">Take Attendance</a>
+                <a href="/dashboard">Dashboard</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container" style="margin-top: 80px;">
+        <div class="enroll-container">
+            <div class="video-section">
+                <h2>📷 Camera Feed</h2>
+                
+                <div class="camera-controls">
+                    <button id="startCameraBtn" class="btn-camera btn-start">
+                        ▶️ Start Camera
+                    </button>
+                    <button id="stopCameraBtn" class="btn-camera btn-stop" style="display: none;">
+                        ⏹️ Stop Camera
+                    </button>
+                </div>
+                
+                <div id="cameraStatus" class="camera-status camera-off">
+                    📷 Camera is OFF - Click "Start Camera" to begin
+                </div>
+                
+                <img id="videoFrame" src="" class="video-frame" style="display: none;">
+                <div id="videoPlaceholder" class="video-frame" style="display: flex; align-items: center; justify-content: center; color: #666;">
+                    Camera is OFF
+                </div>
+            </div>
+            
+            <div class="form-section">
+                <h2>👤 Student Information</h2>
+                <form id="enrollForm">
+                    <div class="form-group">
+                        <label for="studentId">Student ID</label>
+                        <input type="text" id="studentId" required placeholder="e.g., 22051234">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="studentName">Full Name</label>
+                        <input type="text" id="studentName" required placeholder="e.g., Rahul Kumar">
+                    </div>
+                    
+                    <button type="submit" class="btn btn--primary btn--full-width" id="enrollBtn" disabled>
+                        ✅ Enroll Student (Start camera first)
+                    </button>
+                </form>
+                
+                <div id="enrollStatus" class="status-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cameraActive = false;
+        let videoFeedInterval = null;
+        
+        const videoFrame = document.getElementById('videoFrame');
+        const videoPlaceholder = document.getElementById('videoPlaceholder');
+        const cameraStatus = document.getElementById('cameraStatus');
+        const startBtn = document.getElementById('startCameraBtn');
+        const stopBtn = document.getElementById('stopCameraBtn');
+        const enrollBtn = document.getElementById('enrollBtn');
+        
+        // Start camera
+        startBtn.addEventListener('click', async () => {
+            try {
+                // Call backend to ensure camera is ready
+                const response = await fetch('/api/start_camera', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    cameraActive = true;
+                    
+                    // Show video feed
+                    videoFrame.src = "{{ url_for('video_feed') }}?" + new Date().getTime();
+                    videoFrame.style.display = 'block';
+                    videoPlaceholder.style.display = 'none';
+                    
+                    // Update UI
+                    startBtn.style.display = 'none';
+                    stopBtn.style.display = 'inline-block';
+                    cameraStatus.className = 'camera-status camera-on';
+                    cameraStatus.textContent = '✅ Camera is ON - Ready to enroll';
+                    enrollBtn.disabled = false;
+                    enrollBtn.textContent = '✅ Enroll Student';
+                    
+                    console.log('📷 Camera started');
+                } else {
+                    alert('Failed to start camera: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error starting camera: ' + error.message);
+            }
+        });
+        
+        // Stop camera
+        async function stopCamera() {
+            if (!cameraActive) return;
+            
+            try {
+                // Stop video feed
+                videoFrame.src = '';
+                videoFrame.style.display = 'none';
+                videoPlaceholder.style.display = 'flex';
+                
+                // Release backend camera
+                await fetch('/api/release_camera', { method: 'POST' });
+                
+                cameraActive = false;
+                
+                // Update UI
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+                cameraStatus.className = 'camera-status camera-off';
+                cameraStatus.textContent = '📷 Camera is OFF - Click "Start Camera" to begin';
+                enrollBtn.disabled = true;
+                enrollBtn.textContent = '✅ Enroll Student (Start camera first)';
+                
+                console.log('📷 Camera stopped');
+            } catch (error) {
+                console.error('Error stopping camera:', error);
+            }
+        }
+        
+        stopBtn.addEventListener('click', stopCamera);
+        
+        // Enrollment form
+        document.getElementById('enrollForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!cameraActive) {
+                alert('Please start the camera first!');
+                return;
+            }
+            
+            const studentId = document.getElementById('studentId').value;
+            const studentName = document.getElementById('studentName').value;
+            const statusDiv = document.getElementById('enrollStatus');
+            
+            statusDiv.className = 'status-message loading';
+            statusDiv.textContent = '⏳ Processing enrollment...';
+            
+            try {
+                const response = await fetch('/api/enroll', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        name: studentName
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.className = 'status-message success';
+                    statusDiv.textContent = '✅ ' + data.message;
+                    document.getElementById('enrollForm').reset();
+                    
+                    // Auto-stop camera after successful enrollment
+                    setTimeout(() => {
+                        stopCamera();
+                        statusDiv.textContent += ' | Camera stopped automatically';
+                    }, 2000);
+                } else {
+                    statusDiv.className = 'status-message error';
+                    statusDiv.textContent = '❌ ' + data.message;
+                }
+            } catch (error) {
+                statusDiv.className = 'status-message error';
+                statusDiv.textContent = '❌ Network error: ' + error.message;
+            }
+        });
+        
+        // Stop camera when leaving page
+        window.addEventListener('beforeunload', () => {
+            if (cameraActive) {
+                navigator.sendBeacon('/api/release_camera');
+            }
+        });
+        
+        // Stop camera when clicking navigation links
+        document.querySelectorAll('.navbar a').forEach(link => {
+            link.addEventListener('click', (e) => {
+                if (cameraActive) {
+                    e.preventDefault();
+                    stopCamera().then(() => {
+                        window.location.href = link.href;
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

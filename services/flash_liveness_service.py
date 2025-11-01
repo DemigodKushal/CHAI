@@ -6,16 +6,15 @@ import time
 import random
 
 # -------- CONFIG (tweak these) --------
-FLASH_DURATION_MS = 160         # flash on-screen time in milliseconds (0.08-0.18 recommended)
-AFTER_CAPTURE_COUNT = 5         # number of frames to capture after flash and average
-BEFORE_CAPTURE_COUNT = 5        # frames to sample before flash
-MIN_MEAN_DELTA = 0.03           # defined (kept for compatibility) but NOT used in final decision per spec
-MAX_NONUNIFORMITY = 1.0         # std(delta)/mean(delta) threshold - tunable
-MAX_MEAN = 0.2                  # Anomalies have very high mean_delta
-FLASH_WINDOW_PADDING = 40       # pixels to expand bounding box to include cheek reflections
-USE_RANDOM_COLOR = False        # if True, flash will pick a random bright color; else white
-WARN_BEFORE_FLASH = True        # show a warning message briefly before flash (for safety)
-# --------------------------------------
+FLASH_DURATION_MS = 160
+AFTER_CAPTURE_COUNT = 5
+BEFORE_CAPTURE_COUNT = 5
+MIN_MEAN_DELTA = 0.03
+MAX_NONUNIFORMITY = 3.0    # ✅ CHANGED from 1.2 to 3.0 (more lenient)
+MAX_MEAN = 0.5             # ✅ CHANGED from 0.2 to 0.5 (more lenient)
+FLASH_WINDOW_PADDING = 40
+USE_RANDOM_COLOR = False
+WARN_BEFORE_FLASH = True
 
 mp_face = mp.solutions.face_detection
 

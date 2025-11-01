@@ -114,6 +114,23 @@ class FaceRecognitionService:
         face = max(faces, key=lambda f: (f.bbox[2]-f.bbox[0])*(f.bbox[3]-f.bbox[1]))
         return face.normed_embedding
 
+    def get_embedding(self, frame):
+        """
+        Extract single face embedding from a frame (for Flask API).
+        
+        Args:
+            frame (np.ndarray): Input image in BGR format.
+        
+        Returns:
+            np.ndarray or None: Normalized 512-D face embedding if a face is found,
+                                otherwise None.
+        """
+        faces = self.model.get(frame)
+        if not faces:
+            return None
+        # Return the first detected face's embedding
+        return faces[0].normed_embedding
+
     # ---------- INDEX MANAGEMENT ----------
     def add_to_index(self, embedding, student_id):
         """
@@ -152,6 +169,21 @@ class FaceRecognitionService:
         else:
             student_id = self.id_map[idx]
             return student_id, distance
+
+    def recognize(self, embedding):
+        """
+        Alias for find_match for compatibility with Flask code.
+        
+        Args:
+            embedding (np.ndarray): Normalized 512-D face embedding.
+        
+        Returns:
+            tuple or None: (student_id, distance) if match found, else None
+        """
+        student_id, distance = self.find_match(embedding)
+        if student_id is None:
+            return None
+        return (student_id, distance)
 
     # ---------- SAVE & LOAD ----------
     def _save_index(self):
