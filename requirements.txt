@@ -1,11 +1,9 @@
 insightface
-opencv-python
+opencv-python-headless
 faiss-cpu
 numpy
 sqlalchemy
 python-dotenv
-SpeechRecognition==3.10.0
-PyAudio==0.2.13
 mediapipe==0.10.9
-opencv-python==4.8.1.78
-numpy
+Flask==3.0.0
+gunicorn==21.2.0
