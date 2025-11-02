@@ -38,6 +38,42 @@ class DatabaseService:
         print(f"🕒 Attendance marked for ID {student_id} (confidence={confidence:.3f})")
         return attendance
     
+    def get_attendance_record(self, student_id, date):
+        """Check if attendance exists for a student on a specific date"""
+        from datetime import datetime, date as date_type
+    
+        # Convert date to datetime range (start and end of day)
+        if isinstance(date, date_type):
+            start = datetime.combine(date, datetime.min.time())
+            end = datetime.combine(date, datetime.max.time())
+        else:
+            start = date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+    
+            return (
+        self.session.query(Attendance)
+        .filter(
+            Attendance.student_id == student_id,
+            Attendance.timestamp >= start,
+            Attendance.timestamp <= end
+        )
+        .first()
+    )
+
+    def get_all_students(self):
+        """Get all enrolled students"""
+        return self.session.query(Student).all()
+
+    def get_attendance_records(self, student_id):
+        """Get all attendance records for a student"""
+        return (
+        self.session.query(Attendance)
+        .filter(Attendance.student_id == student_id)
+        .order_by(Attendance.timestamp.desc())
+        .all()
+    )
+
+    
     def is_attendance_marked_today(self, student_id):
         """Check if attendance already marked for student today"""
         today = datetime.date.today()

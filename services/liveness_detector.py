@@ -18,7 +18,7 @@ class LivenessDetector:
         
         # KEY DISCRIMINATOR: Uniformity
         self.MIN_UNIFORMITY = 38.0         # Real faces: 45-48
-        self.MAX_UNIFORMITY = 50.0         # SCREENS: 51-54 → HARD FAIL if > 50
+        self.MAX_UNIFORMITY = 60.0         # SCREENS: 51-54 → HARD FAIL if > 50
         
         # Secondary checks
         self.MIN_COLOR_VARIANCE = 1800.0
@@ -28,7 +28,7 @@ class LivenessDetector:
         self.MIN_TOTAL_SCORE = 3.5
         
         # HARD FAIL
-        self.HARD_FAIL_HIGH_UNIFORMITY = 50.0   # Screens are > 50
+        self.HARD_FAIL_HIGH_UNIFORMITY = 65.0   # Screens are > 50
         self.HARD_FAIL_LOW_VARIANCE = 1500.0
     
     def get_brightness(self, frame):
@@ -127,9 +127,12 @@ class LivenessDetector:
         scores = {}
         reasons = []
         
-        # === HARD FAIL #1: UNIFORMITY TOO HIGH (SCREEN) ===
-        if m['uniformity'] > self.HARD_FAIL_HIGH_UNIFORMITY:
-            return False, f"🚫 Screen detected (uniformity: {m['uniformity']:.2f} - too flat/smooth)", {}
+        # Replace the uniformity hard fail with combined check:
+
+        # === HARD FAIL #1: SCREEN (high uniformity AND high edges) ===
+        if m['uniformity'] > 52.0 and m['edge_density'] > 0.045:
+            return False, f"🚫 Screen detected (uniformity: {m['uniformity']:.1f}, edges: {m['edge_density']:.4f})", {}
+
         
         # === HARD FAIL #2: Variance too low ===
         if m['color_variance'] < self.HARD_FAIL_LOW_VARIANCE:
@@ -159,7 +162,7 @@ class LivenessDetector:
             reasons.append(f"Low variance")
         
         # 3. UNIFORMITY (0-1) - KEY METRIC (inverted: lower is better for real faces)
-        if m['uniformity'] <= 48.0:  # Real faces: 45-48
+        if m['uniformity'] <= 60.0:  # Real faces: 45-48
             scores['uniformity'] = 1.0
         elif m['uniformity'] <= self.MAX_UNIFORMITY:
             scores['uniformity'] = 0.5

@@ -235,7 +235,7 @@
                 </div>
                 <p class="info-text">Position your face in the frame and click the button below</p>
                 <p class="info-text" style="color: #32b8c6;">⚡ The screen will flash white - look directly at the camera!</p>
-                <p class="info-text" style="color: #ffa500;">💡 Dark background improves flash detection accuracy</p>
+                <p class="info-text" style="color: #32b8c6;">📍 Location verification enabled - you must be within 100m</p>
             </div>
             
             <button id="takeAttendanceBtn" class="btn btn--primary">
@@ -248,24 +248,73 @@
                 <h3 id="resultName"></h3>
                 <p id="resultId"></p>
                 <p id="resultConfidence"></p>
+                <p id="resultLocation"></p>
             </div>
         </div>
     </div>
 
     <script>
         let videoStream = null;
-        const video = document.getElementById('videoElement');
-        const canvas = document.getElementById('canvasElement');
-        const ctx = canvas.getContext('2d');
-        const cameraLoading = document.getElementById('cameraLoading');
-        const statusDiv = document.getElementById('attendanceStatus');
+        let userLocation = null;
+        
+        // Don't initialize these yet - wait for page load
+        let video, canvas, ctx, cameraLoading, statusDiv;
 
-        // Start camera with permission handling
+        // ==================== GET USER LOCATION ====================
+        
+        async function getUserLocation() {
+            return new Promise((resolve, reject) => {
+                if (!("geolocation" in navigator)) {
+                    reject(new Error("Geolocation not supported"));
+                    return;
+                }
+                
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy
+                        };
+                        
+                        console.log('📍 Location obtained:', userLocation);
+                        resolve(userLocation);
+                    },
+                    (error) => {
+                        console.error('❌ Location error:', error);
+                        let errorMsg = 'Could not get location. ';
+                        
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMsg += 'Please enable location permissions.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMsg += 'Location unavailable.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMsg += 'Request timed out.';
+                                break;
+                            default:
+                                errorMsg += error.message;
+                        }
+                        
+                        reject(new Error(errorMsg));
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            });
+        }
+
+        // ==================== START CAMERA ====================
+        
         async function startCamera() {
             cameraLoading.style.display = 'block';
             
             try {
-                // Request camera permission
                 videoStream = await navigator.mediaDevices.getUserMedia({ 
                     video: { 
                         width: { ideal: 640 },
@@ -279,74 +328,102 @@
                 canvas.height = 480;
                 
                 cameraLoading.style.display = 'none';
-                console.log('✅ Camera started successfully');
+                console.log('✅ Camera started');
                 
             } catch (err) {
                 cameraLoading.style.display = 'none';
-                console.error('❌ Error accessing camera:', err);
-                
-                let errorMessage = 'Could not access camera. ';
-                
-                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                    errorMessage += 'Please grant camera permissions and refresh the page.';
-                } else if (err.name === 'NotFoundError') {
-                    errorMessage += 'No camera found on this device.';
-                } else if (err.name === 'NotReadableError') {
-                    errorMessage += 'Camera is already in use by another application.';
-                } else {
-                    errorMessage += err.message;
-                }
+                console.error('❌ Camera error:', err);
                 
                 statusDiv.className = 'status-message error';
                 statusDiv.style.display = 'block';
-                statusDiv.textContent = '❌ ' + errorMessage;
+                statusDiv.textContent = '❌ Could not access camera: ' + err.message;
             }
         }
 
-        // Capture frame as base64
+        // ==================== CAPTURE FRAME ====================
+        
         function captureFrame() {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             return canvas.toDataURL('image/jpeg', 0.8);
         }
 
-        // Do flash and capture frames
+        // ==================== FLASH CAPTURE ====================
+        
         async function doFlashCapture() {
             const overlay = document.getElementById('flashOverlay');
             
-            // Capture BEFORE flash (5 frames over 250ms)
             const beforeFrames = [];
             for (let i = 0; i < 5; i++) {
                 beforeFrames.push(captureFrame());
                 await new Promise(resolve => setTimeout(resolve, 50));
             }
             
-            // Do the FLASH (bright white screen)
             overlay.classList.add('active');
             await new Promise(resolve => setTimeout(resolve, 200));
             
-            // Capture DURING/AFTER flash (5 frames over 250ms)
             const afterFrames = [];
             for (let i = 0; i < 5; i++) {
                 afterFrames.push(captureFrame());
                 await new Promise(resolve => setTimeout(resolve, 50));
             }
             
-            // Remove flash
             overlay.classList.remove('active');
             
             return { beforeFrames, afterFrames };
         }
 
-        // Take attendance button handler
+        // ==================== PAGE LOAD - INITIALIZE EVERYTHING ====================
+        
+        window.addEventListener('load', async () => {
+            console.log('🚀 Page loaded');
+            
+            // NOW initialize DOM elements (after HTML is loaded)
+            video = document.getElementById('videoElement');
+            canvas = document.getElementById('canvasElement');
+            ctx = canvas.getContext('2d');  // ✅ Safe now
+            cameraLoading = document.getElementById('cameraLoading');
+            statusDiv = document.getElementById('attendanceStatus');
+            
+            // Get location
+            try {
+                await getUserLocation();
+                
+                statusDiv.className = 'status-message success';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = `📍 Location verified (accuracy: ${userLocation.accuracy.toFixed(0)}m)`;
+                
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+                
+            } catch (error) {
+                statusDiv.className = 'status-message error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = '📍 ' + error.message;
+                return;
+            }
+            
+            // Start camera
+            startCamera();
+        });
+
+        // ==================== TAKE ATTENDANCE BUTTON ====================
+        
         document.getElementById('takeAttendanceBtn').addEventListener('click', async () => {
             const btn = document.getElementById('takeAttendanceBtn');
             const resultCard = document.getElementById('resultCard');
             
-            // Check if camera is ready
             if (!videoStream || video.readyState !== 4) {
                 statusDiv.className = 'status-message error';
                 statusDiv.style.display = 'block';
-                statusDiv.textContent = '❌ Camera not ready. Please wait or refresh the page.';
+                statusDiv.textContent = '❌ Camera not ready';
+                return;
+            }
+            
+            if (!userLocation) {
+                statusDiv.className = 'status-message error';
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = '❌ Location not available';
                 return;
             }
             
@@ -355,26 +432,26 @@
             
             statusDiv.className = 'status-message loading';
             statusDiv.style.display = 'block';
-            statusDiv.textContent = '📸 Preparing flash liveness check...';
+            statusDiv.textContent = '📸 Preparing...';
             resultCard.style.display = 'none';
             
             try {
                 await new Promise(resolve => setTimeout(resolve, 500));
                 
-                statusDiv.textContent = '⚡ Flashing now... Keep looking at the camera!';
+                statusDiv.textContent = '⚡ Flashing now... Look at camera!';
                 
-                // Do flash and capture frames
                 const { beforeFrames, afterFrames } = await doFlashCapture();
                 
-                statusDiv.textContent = '🔍 Analyzing liveness and recognizing face...';
+                statusDiv.textContent = '🔍 Verifying location, liveness, and face...';
                 
-                // Send to backend
                 const response = await fetch('/api/take_attendance_browser', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         before_frames: beforeFrames, 
-                        after_frames: afterFrames 
+                        after_frames: afterFrames,
+                        latitude: userLocation.latitude,
+                        longitude: userLocation.longitude
                     })
                 });
                 
@@ -384,13 +461,18 @@
                     statusDiv.className = 'status-message success';
                     statusDiv.textContent = '✅ ' + data.message;
                     
-                    // Show result card
                     resultCard.style.display = 'block';
                     document.getElementById('resultName').textContent = '👤 ' + data.name;
-                    document.getElementById('resultId').textContent = '🎓 Student ID: ' + data.student_id;
-                    document.getElementById('resultConfidence').textContent = '✨ Confidence: ' + data.confidence;
+                    document.getElementById('resultId').textContent = '🎓 ' + data.student_id;
+                    document.getElementById('resultConfidence').textContent = '✨ ' + data.confidence;
                     
-                    // Auto-hide after 5 seconds
+                    // Fixed: Use dedicated element for location
+                    if (data.location_distance) {
+                        document.getElementById('resultLocation').textContent = '📍 Distance: ' + data.location_distance;
+                    } else {
+                        document.getElementById('resultLocation').textContent = '';
+                    }
+                    
                     setTimeout(() => {
                         resultCard.style.display = 'none';
                         statusDiv.style.display = 'none';
@@ -412,55 +494,19 @@
             }
         });
 
-        // Start camera when page loads
-        window.addEventListener('load', () => {
-            console.log('🚀 Page loaded, starting camera...');
-            startCamera();
-        });
-
-        // Cleanup on page unload
+        // ==================== CLEANUP ====================
+        
         window.addEventListener('beforeunload', () => {
             if (videoStream) {
                 videoStream.getTracks().forEach(track => track.stop());
             }
         });
-
-                // ==================== CAMERA CLEANUP ====================
         
-        // Stop camera when leaving page
-        window.addEventListener('beforeunload', () => {
-            if (videoStream) {
-                videoStream.getTracks().forEach(track => {
-                    track.stop();
-                    console.log('📷 Camera stopped (page unload)');
-                });
-            }
-        });
-        
-        // Stop camera when page becomes hidden (tab switch)
         document.addEventListener('visibilitychange', () => {
             if (document.hidden && videoStream) {
-                videoStream.getTracks().forEach(track => {
-                    track.stop();
-                    console.log('📷 Camera stopped (page hidden)');
-                });
+                videoStream.getTracks().forEach(track => track.stop());
             }
         });
-        
-        // Stop camera immediately when clicking navigation links
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.navbar a').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    if (videoStream) {
-                        videoStream.getTracks().forEach(track => {
-                            track.stop();
-                            console.log('📷 Camera stopped (navigation)');
-                        });
-                    }
-                });
-            });
-        });
-
     </script>
 </body>
 </html>
