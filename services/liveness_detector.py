@@ -1,7 +1,7 @@
-# services/liveness_detector.py - UPDATED FINAL VERSION
+# services/liveness_detector.py - FINAL WORKING VERSION
 """
-Multi-layer liveness detection with STRICT EDGE DENSITY CHECK
-Prevents screen spoofs from passing
+Multi-layer liveness detection - Uses UNIFORMITY as main discriminator
+Screens have HIGH uniformity (flat), real faces have LOWER uniformity (depth)
 """
 
 import cv2
@@ -9,27 +9,27 @@ import numpy as np
 
 
 class LivenessDetector:
-    """Enhanced liveness detection with hard failure modes"""
+    """Working liveness detection - uniformity-based"""
     
     def __init__(self):
-        # STRICT THRESHOLDS
+        # Flash response
         self.MIN_BRIGHTNESS_CHANGE = 2.5
-        self.MAX_BRIGHTNESS_CHANGE = 12.0
+        self.MAX_BRIGHTNESS_CHANGE = 30.0  # Very lenient for real faces
         
-        self.MIN_COLOR_VARIANCE = 2400.0
-        self.MAX_EDGE_DENSITY = 0.060          # STRICTER: 0.065 → 0.060
+        # KEY DISCRIMINATOR: Uniformity
+        self.MIN_UNIFORMITY = 38.0         # Real faces: 45-48
+        self.MAX_UNIFORMITY = 50.0         # SCREENS: 51-54 → HARD FAIL if > 50
         
-        self.MIN_UNIFORMITY = 52.0
-        self.MAX_NONUNIFORMITY = 0.40          # STRICTER: 0.45 → 0.40
+        # Secondary checks
+        self.MIN_COLOR_VARIANCE = 1800.0
+        self.MAX_EDGE_DENSITY = 0.065      # Screens: 0.059-0.078, Real: 0.032-0.036
         
-        self.MIN_MEAN_DELTA = 0.8
-        self.MAX_MEAN_DELTA = 2.5
+        # Scoring
+        self.MIN_TOTAL_SCORE = 3.5
         
-        self.MIN_TOTAL_SCORE = 4.2             # RAISED: 4.0 → 4.2
-        
-        # HARD FAIL thresholds (automatic fail regardless of score)
-        self.HARD_FAIL_EDGE_DENSITY = 0.065    # Screens always > 0.06
-        self.HARD_FAIL_LOW_VARIANCE = 2200.0   # Too far or screen
+        # HARD FAIL
+        self.HARD_FAIL_HIGH_UNIFORMITY = 50.0   # Screens are > 50
+        self.HARD_FAIL_LOW_VARIANCE = 1500.0
     
     def get_brightness(self, frame):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -74,23 +74,20 @@ class LivenessDetector:
         return np.mean(deltas) if deltas else 0
     
     def _get_distance_feedback(self, metrics):
-        """Provide helpful feedback based on distance indicators"""
+        """Provide helpful feedback"""
         variance = metrics['color_variance']
         brightness = metrics['brightness_change_percent']
         
-        if variance < 2200 and brightness < 3.0:
+        if variance < 1600 and brightness < 2.5:
             return "⬅️ Please move CLOSER to the camera"
         
-        if brightness > 13.0:
-            return "➡️ Please move BACK from the camera"
+        if brightness > 26.0:
+            return "➡️ Please move BACK from the camera (too close)"
         
-        if variance < 2600:
+        if variance < 2000:
             return "⬅️ Move slightly CLOSER for better detection"
         
-        if 2800 <= variance <= 4000 and 3.0 <= brightness <= 10.0:
-            return "✅ Distance is perfect!"
-        
-        return "⚠️ Position not optimal - try adjusting distance"
+        return "✅ Position is good!"
     
     def analyze_frames(self, before_frames, after_frames):
         before_brightness = np.mean([self.get_brightness(f) for f in before_frames])
@@ -126,94 +123,77 @@ class LivenessDetector:
         return is_live, metrics, fail_reason
     
     def _check_liveness_with_scoring(self, m):
-        """Strict scoring with HARD FAIL conditions"""
+        """Uniformity-based discrimination"""
         scores = {}
         reasons = []
         
-        # === HARD FAIL CONDITIONS (immediate rejection) ===
+        # === HARD FAIL #1: UNIFORMITY TOO HIGH (SCREEN) ===
+        if m['uniformity'] > self.HARD_FAIL_HIGH_UNIFORMITY:
+            return False, f"🚫 Screen detected (uniformity: {m['uniformity']:.2f} - too flat/smooth)", {}
         
-        # Hard fail 1: Edge density too high (screen pixels)
-        if m['edge_density'] > self.HARD_FAIL_EDGE_DENSITY:
-            return False, f"🚫 Screen detected (edge density: {m['edge_density']:.4f})", {}
-        
-        # Hard fail 2: Variance too low (too far or flat surface)
+        # === HARD FAIL #2: Variance too low ===
         if m['color_variance'] < self.HARD_FAIL_LOW_VARIANCE:
-            return False, f"📍 Too far from camera or flat surface (variance: {m['color_variance']:.0f})", {}
+            return False, f"📍 Move closer (variance: {m['color_variance']:.0f})", {}
         
-        # Hard fail 3: Nonuniformity too high (screen refresh pattern)
-        if m['nonuniformity'] > 0.6:
-            return False, f"🚫 Screen refresh pattern detected (nonuniformity: {m['nonuniformity']:.2f})", {}
+        # === HARD FAIL #3: Edge density (screens have higher edges) ===
+        if m['edge_density'] > self.MAX_EDGE_DENSITY:
+            return False, f"🚫 Screen pixels detected (edges: {m['edge_density']:.4f})", {}
         
-        # === SCORING (if not hard failed) ===
+        # === SCORING ===
         
-        # Check 1: Brightness (0-1)
+        # 1. Brightness (0-1)
         if self.MIN_BRIGHTNESS_CHANGE <= m['brightness_change_percent'] <= self.MAX_BRIGHTNESS_CHANGE:
-            mid = 6.0
-            distance = abs(m['brightness_change_percent'] - mid)
-            scores['brightness'] = max(0.5, 1.0 - (distance / 8.0))
+            scores['brightness'] = 1.0
         else:
-            scores['brightness'] = 0.2
+            scores['brightness'] = 0.3
             if m['brightness_change_percent'] < self.MIN_BRIGHTNESS_CHANGE:
-                reasons.append(f"Too far from camera")
-            else:
-                reasons.append(f"Too close to camera")
+                reasons.append(f"Weak flash")
         
-        # Check 2: Color variance (0-1)
-        if m['color_variance'] >= self.MIN_COLOR_VARIANCE:
-            if m['color_variance'] >= 2800:
-                scores['variance'] = min(1.0, 0.8 + (m['color_variance'] - 2800) / 3000)
-            else:
-                scores['variance'] = 0.5 + (m['color_variance'] - 2400) / 1000
+        # 2. Color variance (0-1)
+        if m['color_variance'] >= 2200:
+            scores['variance'] = 1.0
+        elif m['color_variance'] >= self.MIN_COLOR_VARIANCE:
+            scores['variance'] = 0.7
         else:
-            scores['variance'] = 0.1
-            reasons.append(f"Low detail")
+            scores['variance'] = 0.3
+            reasons.append(f"Low variance")
         
-        # Check 3: Edge density (0-1) - STRICT
-        if m['edge_density'] <= self.MAX_EDGE_DENSITY:
-            # More points for lower edge density
-            scores['edges'] = 0.6 + (0.4 * (1 - m['edge_density'] / self.MAX_EDGE_DENSITY))
-        else:
-            scores['edges'] = 0.2  # Partial credit
-            reasons.append(f"High edges")
-        
-        # Check 4: Uniformity (0-1)
-        if m['uniformity'] >= self.MIN_UNIFORMITY:
-            excess = m['uniformity'] - self.MIN_UNIFORMITY
-            scores['uniformity'] = min(1.0, 0.7 + (excess / 30))
-        elif m['uniformity'] >= 45:
+        # 3. UNIFORMITY (0-1) - KEY METRIC (inverted: lower is better for real faces)
+        if m['uniformity'] <= 48.0:  # Real faces: 45-48
+            scores['uniformity'] = 1.0
+        elif m['uniformity'] <= self.MAX_UNIFORMITY:
             scores['uniformity'] = 0.5
         else:
-            scores['uniformity'] = 0.2
-            reasons.append(f"Flat surface")
+            scores['uniformity'] = 0.0  # Will be caught by hard fail
         
-        # Check 5: Nonuniformity (0-1) - STRICT
-        if m['nonuniformity'] <= self.MAX_NONUNIFORMITY:
-            scores['nonuniformity'] = 0.8 + (0.2 * (1 - m['nonuniformity'] / self.MAX_NONUNIFORMITY))
+        # 4. Edge density (0-1)
+        if m['edge_density'] <= 0.040:  # Real faces: 0.032-0.036
+            scores['edges'] = 1.0
+        elif m['edge_density'] <= 0.055:
+            scores['edges'] = 0.7
         else:
-            scores['nonuniformity'] = 0.3
-            reasons.append(f"Inconsistent")
+            scores['edges'] = 0.3
+            reasons.append(f"High edges")
         
-        # Check 6: Mean delta (0-1)
-        if self.MIN_MEAN_DELTA <= m['mean_delta'] <= self.MAX_MEAN_DELTA:
-            mid = 1.5
-            distance = abs(m['mean_delta'] - mid)
-            scores['mean_delta'] = max(0.6, 1.0 - (distance / 1.5))
-        elif 0.6 <= m['mean_delta'] <= 2.8:
-            scores['mean_delta'] = 0.4
+        # 5. Mean delta (0-1)
+        if 1.0 <= m['mean_delta'] <= 2.5:
+            scores['mean_delta'] = 1.0
+        elif 0.5 <= m['mean_delta'] <= 3.0:
+            scores['mean_delta'] = 0.6
         else:
-            scores['mean_delta'] = 0.1
-            reasons.append(f"Motion issue")
+            scores['mean_delta'] = 0.2
+        
+        # 6. Nonuniformity bonus
+        if m['nonuniformity'] <= 0.5:
+            scores['nonuniformity'] = 0.5
+        else:
+            scores['nonuniformity'] = 0.0
         
         total_score = sum(scores.values())
         is_live = total_score >= self.MIN_TOTAL_SCORE
         
         if not is_live:
-            if m['color_variance'] < 2400 or m['brightness_change_percent'] < 3.0:
-                fail_reason = f"📍 {m['distance_feedback']}"
-            elif m['brightness_change_percent'] > 13.0:
-                fail_reason = f"📍 {m['distance_feedback']}"
-            else:
-                fail_reason = f"Low confidence ({total_score:.2f}/6.0) - {', '.join(reasons[:2])}"
+            fail_reason = f"Low confidence ({total_score:.2f}/5.5) - {', '.join(reasons[:2]) if reasons else 'Multiple checks failed'}"
         else:
             fail_reason = ""
         
@@ -224,12 +204,12 @@ class LivenessDetector:
         print(f"📊 Liveness Analysis:")
         print(f"   Brightness: {m['before_brightness']:.2f} → {m['after_brightness']:.2f} ({m['brightness_change_percent']:.2f}%)")
         print(f"   Color Variance: {m['color_variance']:.2f}")
-        print(f"   Edge Density: {m['edge_density']:.4f}")
-        print(f"   Brightness Uniformity: {m['uniformity']:.2f}")
+        print(f"   Edge Density: {m['edge_density']:.4f} (max: {self.MAX_EDGE_DENSITY})")
+        print(f"   ⭐ Uniformity: {m['uniformity']:.2f} (max: {self.MAX_UNIFORMITY} - SCREENS > 50)")
         print(f"   Nonuniformity: {m['nonuniformity']:.2f}")
         print(f"   Mean Delta: {m['mean_delta']:.2f}")
         if 'scores' in m and m['scores']:
             total = sum(m['scores'].values())
-            print(f"   📊 Score: {total:.2f}/6.0 (threshold: {self.MIN_TOTAL_SCORE})")
+            print(f"   📊 Score: {total:.2f}/5.5 (threshold: {self.MIN_TOTAL_SCORE})")
         if 'distance_feedback' in m:
             print(f"   {m['distance_feedback']}")
