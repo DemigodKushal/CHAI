@@ -25,7 +25,7 @@ location_service = LocationService()
 
 # OPTIONAL: Set manual classroom location for accurate geofencing
 # Get coordinates from Google Maps: Right-click on location → Copy coordinates
-location_service.set_server_location_manual(25.263790, 82.984952)  # IIT BHU example
+location_service.set_server_location_manual(25.263764, 82.984961)  # IIT BHU example
 
 # Camera instance
 camera = None
